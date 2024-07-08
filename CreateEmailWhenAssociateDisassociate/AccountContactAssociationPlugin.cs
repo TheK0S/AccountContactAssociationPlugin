@@ -1,4 +1,5 @@
-﻿using Microsoft.Xrm.Sdk;
+﻿using Microsoft.Crm.Sdk.Messages;
+using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using System;
 using System.Collections.Generic;
@@ -60,21 +61,40 @@ namespace CreateEmailWhenAssociateDisassociate
         private void CreateEmail(IOrganizationService service, Guid userId, EntityReference accountReference, EntityReference contactReference, string subjectTemplate, string descriptionTemplate)
         {
             Entity account = service.Retrieve("account", accountReference.Id, new ColumnSet("name"));
-            Entity contact = service.Retrieve("contact", contactReference.Id, new ColumnSet("fullname"));
+            Entity contact = service.Retrieve("contact", contactReference.Id, new ColumnSet("fullname", "emailaddress1"));
 
             string subject = $"{subjectTemplate} {account["name"]} with contact {contact["fullname"]}";
             string description = $"{descriptionTemplate} https://org82a3f762.crm11.dynamics.com/main.aspx?etn=account&id={accountReference.Id}&pagetype=entityrecord";
 
-            Entity email = new Entity("email")
+            //Entity email = new Entity("email")
+            //{
+            //    ["to"] = new EntityCollection(new[] { new Entity("activityparty") { ["partyid"] = contactReference } }),
+            //    ["from"] = new EntityCollection(new[] { new Entity("activityparty") { ["partyid"] = new EntityReference("systemuser", userId) } }),
+            //    ["subject"] = subject,
+            //    ["description"] = description,
+            //    ["regardingobjectid"] = contactReference
+            //};
+
+            //service.Create(email);
+
+
+            // Prepare input parameters for the custom action
+            Entity inputEntity = new Entity("new_SetCustomEmailAction");
+
+            inputEntity["Subject"] = subject;
+            inputEntity["Body"] = description;
+            inputEntity["RecepientEmail"] = contact["emailaddress1"];
+            inputEntity["RegardingContact"] = new EntityReference("contact", contactReference.Id);
+            inputEntity["Sender"] = new EntityReference("systemuser", userId);
+
+            OrganizationRequest request = new OrganizationRequest
             {
-                ["to"] = new EntityCollection(new[] { new Entity("activityparty") { ["partyid"] = contactReference } }),
-                ["from"] = new EntityCollection(new[] { new Entity("activityparty") { ["partyid"] = new EntityReference("systemuser", userId) } }),
-                ["subject"] = subject,
-                ["description"] = description,
-                ["regardingobjectid"] = contactReference
+                RequestName = "new_SetCustomEmailAction",
+                Parameters = new ParameterCollection { { "Subject", inputEntity["Subject"] }, { "Body", inputEntity["Body"] }, { "RecepientEmail", inputEntity["RecepientEmail"] }, { "RegardingContact", inputEntity["RegardingContact"] }, { "Sender", inputEntity["Sender"] } }
             };
 
-            service.Create(email);
+            service.Execute(request);
+
         }
     }
 }
